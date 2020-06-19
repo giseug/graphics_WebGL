@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+    <title> Snowman </title>
+	
+    <script type="text/javascript" src="../libs/three.js"></script>
+    <script type="text/javascript" src="../libs/OBJLoader.js"></script>
+    <script type="text/javascript" src="../libs/stats.js"></script>
+    <script type="text/javascript" src="../libs/dat.gui.js"></script>
+
+</head>
+<body>
+
+<div id="WebGL-output"></div>
+
+<script type="text/javascript">
+    function init() {
+
+        var stats = initStats();
+
+		//Three로 scene 생성
+        var scene = new THREE.Scene();
+
+        // 카메라
+        var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.x = 130;
+        camera.position.y = 80;
+        camera.position.z = 40;
+        camera.lookAt(scene.position);
+        scene.add(camera);
+
+        // 캔버스 크기, 색상지정
+        var webGLRenderer = new THREE.WebGLRenderer();
+        webGLRenderer.setClearColor(new THREE.Color(0x000000, 1.0));
+        webGLRenderer.setSize(window.innerWidth, window.innerHeight);
+		// html과 연결
+        document.getElementById("WebGL-output").appendChild(webGLRenderer.domElement);
+
+        // 조명
+        var spotLight = new THREE.DirectionalLight(0xffffff);
+        spotLight.position.set(30, 40, 50);
+        spotLight.intensity = 1;
+        scene.add(spotLight);
+
+        var mesh;
+	
+		//오브젝트 파일 로드
+        var loader = new THREE.OBJLoader();
+        loader.load('../models/snowmannoonly.obj', function (object) {
+            var material = new THREE.MeshLambertMaterial({color: 0xfffff});
+            mesh = object;
+            object.scale.set(1,1,1);
+            scene.add(object);
+        });
+		
+		//파티클 기본 설정
+		var control = new function () {
+            this.size = 10;
+            this.transparent = true;
+            this.opacity = 0.6;
+            this.color = 0xffffff;
+
+            this.sizeAttenuation = true;
+
+            this.redraw = function () {
+                var toRemove = [];
+                scene.children.forEach(function (child) {
+                    if (child instanceof THREE.PointCloud) {
+                        toRemove.push(child);
+                    }
+                });
+                toRemove.forEach(function (child) {
+                    scene.remove(child)
+                });
+                createPointClouds(control.size, control.transparent, control.opacity, control.sizeAttenuation, control.color);
+            };
+        };
+		//파티클 텍스쳐
+		function createPointClouds(size, transparent, opacity, sizeAttenuation, color) {
+
+            var texture = THREE.ImageUtils.loadTexture("../models/snow.png");
+
+            scene.add(createPointCloud("system", texture, size, transparent, opacity, sizeAttenuation, color));
+        }
+		
+		//사용자컨트롤
+		var gui = new dat.GUI();
+        gui.add(control, 'size', 0, 20).onChange(control.redraw);
+        gui.add(control, 'opacity', 0, 1).onChange(control.redraw);
+        gui.addColor(control, 'color').onChange(control.redraw);
+
+        control.redraw();
+
+        function createPointCloud(name, texture, size, transparent, opacity, sizeAttenuation, color) {
+            var geom = new THREE.Geometry();
+
+            var color = new THREE.Color(color);
+            color.setHSL(color.getHSL().h,
+                    color.getHSL().s,
+                    (Math.random()) * color.getHSL().l);
+
+            var material = new THREE.PointCloudMaterial({
+                size: size,
+                transparent: transparent,
+                opacity: opacity,
+                map: texture,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                sizeAttenuation: sizeAttenuation,
+                color: color
+            });
+
+            var range = 120;
+            for (var i = 0; i < 50; i++) {
+                var particle = new THREE.Vector3(
+                        Math.random() * range - range / 2,
+                        Math.random() * range * 1.5,
+                        Math.random() * range - range / 2);
+                particle.velocityY = 0.1 + Math.random() / 5;
+                particle.velocityX = (Math.random() - 0.5) / 3;
+                particle.velocityZ = (Math.random() - 0.5) / 3;
+                geom.vertices.push(particle);
+            }
+
+            var system = new THREE.PointCloud(geom, material);
+            system.name = name;
+            system.sortParticles = true;
+            return system;
+        }
+		
+
+		
+		//rendering
+        render();
+		
+        function render() {
+            stats.update();
+			
+			scene.children.forEach(function (child) {
+                if (child instanceof THREE.PointCloud) {
+                    var vertices = child.geometry.vertices;
+                    vertices.forEach(function (v) {
+                        v.y = v.y - (v.velocityY);
+                        v.x = v.x - (v.velocityX);
+                        v.z = v.z - (v.velocityZ);
+
+                        if (v.y <= 0) v.y = 60;
+                        if (v.x <= -20 || v.x >= 20) v.velocityX = v.velocityX * -1;
+                        if (v.z <= -20 || v.z >= 20) v.velocityZ = v.velocityZ * -1;
+                    });
+                }
+            });
+			
+			
+			//y축으로 회전
+            if (mesh) {
+                mesh.rotation.y+=0.006;
+            }
+            requestAnimationFrame(render);
+            webGLRenderer.render(scene, camera);
+        }
+
+        function initStats() {
+
+            var stats = new Stats();
+            return stats;
+        }
+		
+    }
+    window.onload = init;
+</script>
+
+</body>
+</html>
